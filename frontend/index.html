@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Book Rental DApp</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      .container {
+        width: 80%;
+        margin: 0 auto;
+        max-width: 600px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      input,
+      button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 5px;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      .book-list {
+        margin-top: 30px;
+      }
+      .book-item {
+        background-color: #fff;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .book-item p {
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Book Rental DApp</h1>
+
+      <!-- Add Book Form -->
+      <h2>Add a New Book</h2>
+      <div class="form-group">
+        <input type="text" id="bookTitle" placeholder="Book Title" />
+      </div>
+      <div class="form-group">
+        <input type="text" id="bookAuthor" placeholder="Book Author" />
+      </div>
+      <div class="form-group">
+        <input
+          type="number"
+          id="rentalPrice"
+          placeholder="Rental Price (in wei)"
+        />
+      </div>
+      <button onclick="addBook()">Add Book</button>
+
+      <hr />
+
+      <!-- Rent Book Form -->
+      <h2>Rent a Book</h2>
+      <div class="form-group">
+        <input type="number" id="bookId" placeholder="Enter Book ID to Rent" />
+      </div>
+      <div class="form-group">
+        <input type="number" id="rentalDays" placeholder="Rental Days" />
+      </div>
+      <button onclick="rentBook()">Rent Book</button>
+
+      <hr />
+
+      <!-- Book List Section -->
+      <div class="book-list" id="bookList"></div>
+    </div>
+
+    <script>
+      let web3;
+      let contract;
+      const contractAddress = "0xe34b00E656794744E8393d71Fe873579F4706A3F";
+      const contractABI = [
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "bookId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "title",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "author",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "rentalPrice",
+              type: "uint256",
+            },
+          ],
+          name: "BookAdded",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "bookId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "renter",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "rentedUntil",
+              type: "uint256",
+            },
+          ],
+          name: "BookRented",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "_title",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "_author",
+              type: "string",
+            },
+            {
+              internalType: "uint256",
+              name: "_rentalPrice",
+              type: "uint256",
+            },
+          ],
+          name: "addBook",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "books",
+          outputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              internalType: "string",
+              name: "title",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "author",
+              type: "string",
+            },
+            {
+              internalType: "bool",
+              name: "isAvailable",
+              type: "bool",
+            },
+            {
+              internalType: "uint256",
+              name: "rentalPrice",
+              type: "uint256",
+            },
+            {
+              internalType: "address",
+              name: "currentRenter",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "rentedUntil",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "ownerBooks",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_bookId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "_rentalDays",
+              type: "uint256",
+            },
+          ],
+          name: "rentBook",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+      ];
+
+      // Check if MetaMask is available
+      if (typeof window.ethereum !== "undefined") {
+        web3 = new Web3(window.ethereum);
+        window.ethereum
+          .request({ method: "eth_requestAccounts" })
+          .then((accounts) => {
+            console.log("Connected to MetaMask:", accounts[0]);
+            initContract();
+          });
+      } else {
+        alert("Please install MetaMask!");
+      }
+
+      // Initialize contract
+      function initContract() {
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+        displayBooks();
+      }
+
+      // Add a new book to the rental system
+      async function addBook() {
+        const title = document.getElementById("bookTitle").value;
+        const author = document.getElementById("bookAuthor").value;
+        const rentalPrice = document.getElementById("rentalPrice").value;
+
+        if (title && author && rentalPrice) {
+          const accounts = await web3.eth.getAccounts();
+          contract.methods
+            .addBook(title, author, rentalPrice)
+            .send({ from: accounts[0] })
+            .on("transactionHash", function (hash) {
+              console.log("Transaction sent with hash:", hash);
+            })
+            .on("receipt", function (receipt) {
+              console.log("Book added:", receipt);
+              displayBooks();
+            });
+        } else {
+          alert("Please fill in all fields.");
+        }
+      }
+
+      // Rent a book
+      async function rentBook() {
+        const bookId = document.getElementById("bookId").value;
+        const rentalDays = document.getElementById("rentalDays").value;
+
+        if (bookId && rentalDays) {
+          const accounts = await web3.eth.getAccounts();
+          const book = await contract.methods.books(bookId).call();
+          const totalRentalCost = book.rentalPrice * rentalDays;
+
+          contract.methods
+            .rentBook(bookId, rentalDays)
+            .send({
+              from: accounts[0],
+              value: totalRentalCost,
+            })
+            .on("transactionHash", function (hash) {
+              console.log("Transaction sent with hash:", hash);
+            })
+            .on("receipt", function (receipt) {
+              console.log("Book rented:", receipt);
+              displayBooks();
+            });
+        } else {
+          alert("Please fill in both fields.");
+        }
+      }
+
+      // Display all books
+      async function displayBooks() {
+        const bookListDiv = document.getElementById("bookList");
+        bookListDiv.innerHTML = ""; // Clear current list
+
+        const bookCount = await contract.methods.books.length().call();
+
+        for (let i = 0; i < bookCount; i++) {
+          const book = await contract.methods.books(i).call();
+          const bookItem = document.createElement("div");
+          bookItem.classList.add("book-item");
+
+          bookItem.innerHTML = `
+                <h3>${book.title} by ${book.author}</h3>
+                <p>Rental Price: ${book.rentalPrice} wei</p>
+                <p>Status: ${book.isAvailable ? "Available" : "Rented"}</p>
+                <p>Current Renter: ${book.currentRenter}</p>
+                <p>Rented Until: ${
+                  book.rentedUntil
+                    ? new Date(book.rentedUntil * 1000).toLocaleString()
+                    : "N/A"
+                }</p>
+            `;
+          bookListDiv.appendChild(bookItem);
+        }
+      }
+    </script>
+  </body>
+</html>
